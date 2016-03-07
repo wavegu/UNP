@@ -1,15 +1,27 @@
+#include <iostream>
+
 extern "C"{
     #include "unp.h"
 }
 
+using namespace std;
+
 void reply(int sockfd, SA *pcliaddr, socklen_t clilen){
     socklen_t len;
-    char message[MAXLINE];
+    char buffer[MAXLINE];
 
     while (TRUE){
+        bzero(buffer, MAXLINE);
         len = clilen;
-        int ret = Recvfrom(sockfd, message, MAXLINE, 0, pcliaddr, &len);
-        Sendto(sockfd, message, ret, 0, pcliaddr, len);
+        cout << "waiting..." << endl;
+        int ret = Recvfrom(sockfd, buffer, MAXLINE, 0, pcliaddr, &len);
+        string message = string(buffer);
+        message = message.substr(0, message.find('\n'));
+        cout << "Receiving message:" << message << message.length() << endl;
+        if (message == "bye"){
+            break;
+        }
+        Sendto(sockfd, message.c_str(), ret, 0, pcliaddr, len);
     }
 }
 
