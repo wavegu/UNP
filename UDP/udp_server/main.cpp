@@ -1,4 +1,5 @@
 #include <iostream>
+#include "query.h"
 
 extern "C"{
     #include "unp.h"
@@ -14,14 +15,15 @@ void reply(int sockfd, SA *pcliaddr, socklen_t clilen){
         bzero(buffer, MAXLINE);
         len = clilen;
         cout << "waiting..." << endl;
-        int ret = Recvfrom(sockfd, buffer, MAXLINE, 0, pcliaddr, &len);
-        string message = string(buffer);
-        message = message.substr(0, message.find('\n'));
-        cout << "Receiving message:" << message << message.length() << endl;
-        if (message == "bye"){
-            break;
-        }
-        Sendto(sockfd, message.c_str(), ret, 0, pcliaddr, len);
+        Recvfrom(sockfd, buffer, MAXLINE, 0, pcliaddr, &len);
+        RequestPackage package = *((RequestPackage*)buffer);
+        ResponsePackage response_package;
+        response_package.package_num = package.package_num;
+        response_package.tot_package_num = package.tot_package_num;
+        response_package.response_type = CHECK_REQUEST;
+        strcpy(response_package.timestamp, package.timestamp);
+        strcpy(response_package.content, package.content);
+        Sendto(sockfd, (char*) &response_package, sizeof(response_package), 0, pcliaddr, clilen);
     }
 }
 
