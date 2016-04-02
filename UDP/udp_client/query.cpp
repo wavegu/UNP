@@ -19,10 +19,13 @@ string Query::get_answer() {
     // Send them all
     send_request_packages(request_packages);
 
-//    // Now all request packages are checked by server, time to ask for the answer
-//    RequestPackage ask_for_answer_package;
-//    ask_for_answer_package.request_type = ASK_FOR_ANSWER;
-//    Write(sockfd, (char*) &ask_for_answer_package, sizeof((char*) &ask_for_answer_package));
+    // Now all request packages are checked by server, time to ask for the answer
+    RequestPackage ask_for_answer_package;
+    ask_for_answer_package.tot_package_num = request_packages.size();
+    ask_for_answer_package.request_type = ASK_FOR_ANSWER;
+    strcpy(ask_for_answer_package.timestamp, timestamp.c_str());
+    cout << int(ask_for_answer_package.request_type) << "Asking for answer" << endl;
+    send_package(&ask_for_answer_package);
 
     return answer;
 }
@@ -90,6 +93,9 @@ void Query::send_request_packages(vector<RequestPackage> request_packages) {
     while (true) {
         // Send the current package
         RequestPackage current_request_package = request_packages[current_package_num];
+
+        cout << "sending " << current_request_package.content << endl;
+
         send_package(&current_request_package);
 
         // Get response
@@ -102,11 +108,12 @@ void Query::send_request_packages(vector<RequestPackage> request_packages) {
         ResponsePackage response_package = *((ResponsePackage*)recvline);
         printf("[%d] %s\n", response_package.response_type, response_package.content);
 
-        if (response_package.response_type != CHECK_REQUEST){
+        if (response_package.response_type != CHECK_REQUEST
+            || response_package.package_num != current_request_package.package_num
+            || strcmp(response_package.content, current_request_package.content) != 0){
             cout << "type wrong" << response_package.response_type << ' ' << CHECK_REQUEST << endl;
             continue;
         }
-//            || response_package.package_num != current_packagrent_request_package.content))
 
         cout << "ok" << endl;
 

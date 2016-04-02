@@ -13,7 +13,7 @@ extern "C"{
 #include <vector>
 #include <iostream>
 using namespace std;
-#define PACKAGE_CONTENT_LEN 3
+#define PACKAGE_CONTENT_LEN 1024
 
 
 enum RequestType {

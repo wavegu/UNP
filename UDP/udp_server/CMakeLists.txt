@@ -7,4 +7,4 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 set(SOURCE_FILES
     main.cpp)
 
-add_executable(udp_server ${SOURCE_FILES})
+add_executable(udp_server ${SOURCE_FILES} operator.h operator.cpp util.h util.cpp)

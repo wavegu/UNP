@@ -1,19 +1,21 @@
 //
-// Created by wave on 16/3/10.
+// Created by wave on 16/4/1.
 //
 
-#ifndef UDP_CLIENT_UDPREQUEST_H
-#define UDP_CLIENT_UDPREQUEST_H
+#ifndef UDP_SERVER_RESPONSE_H
+#define UDP_SERVER_RESPONSE_H
 
 extern "C"{
 #include "unp.h"
 }
 
 #include "util.h"
+#include <map>
+#include <string>
 #include <vector>
 #include <iostream>
-using namespace std;
-#define PACKAGE_CONTENT_LEN 3
+
+#define PACKAGE_CONTENT_LEN 1024
 
 
 enum RequestType {
@@ -47,21 +49,24 @@ struct ResponsePackage {
     char            content[PACKAGE_CONTENT_LEN+1];
 };
 
-
-class Query {
-
+class Operator {
 private:
-    int     sockfd;
-    string  raw_query_line = "";
-    string  timestamp = get_timestamp();
+    int sockfd;
+    SA *pcliaddr;
+    socklen_t clilen;
+    std::map<std::string, std::string*> timestamp_to_rawstrings;
+
+    void add_rawstring(RequestPackage);
+    void send_package(ResponsePackage*);
+    void send_response_packages(std::vector<ResponsePackage>);
+    ResponsePackage string_to_package(std::string, std::string);
+    std::vector<ResponsePackage> get_answer_packages(std::string, std::string);
 
 public:
-    Query(int _sockfd, string _raw_query_line);
-    string                  get_answer();
-    RequestPackage          string_to_package(string);
-    vector<RequestPackage>  get_request_packages();
-    void                    send_request_packages(vector<RequestPackage>);
+    Operator(int sockfd, SA *pcliaddr, socklen_t clilen);
+    ~Operator();
+    void run();
+    std::string get_url_string(RequestPackage);
 };
 
-
-#endif //UDP_CLIENT_UDPREQUEST_H
+#endif //UDP_SERVER_RESPONSE_H
