@@ -3,6 +3,7 @@
 //
 
 #include "operator.h"
+#define MAX_RESEND_TIMES 10
 using namespace std;
 
 /************************************ Public ************************************/
@@ -172,10 +173,18 @@ Package Operator::send_package(Package *p_package, bool need_response) {
 
     Signal(SIGALRM, sig_alarm);
 
+    int resend_times = 0;
+
 sendpackage:
 
     Package response_package;
     response_package.package_type = EMPTY_PACKAGE;
+
+    resend_times++;
+    if (resend_times > MAX_RESEND_TIMES) {
+        response_package.package_type = ENOUGH_RESENT;
+        return response_package;
+    }
 
     // simulate a package loss
     bool missing_package = false;
@@ -223,6 +232,11 @@ void Operator::send_response_packages(vector<Package> response_packages) {
 
         // need response, and resend if timeout
         Package check_package = send_package(&current_response_package, true);
+
+        if (check_package.package_type == ENOUGH_RESENT) {
+            cout << get_timestamp() << " | " << "ENOUGH RESENT" << endl;
+            return;
+        }
 
         if (check_package.package_type == END_OF_SESSION) {
             cout << get_timestamp() << " | " << "END OF SESSION" << endl;

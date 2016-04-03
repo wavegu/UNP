@@ -24,7 +24,8 @@ enum PackageType {
     CHECK_RESPONSE,         // I've got your response package
     ASK_FOR_ANSWER,
     EMPTY_PACKAGE,
-    END_OF_SESSION
+    END_OF_SESSION,
+    ENOUGH_RESENT
 };
 
 

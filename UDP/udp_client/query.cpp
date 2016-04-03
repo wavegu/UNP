@@ -3,6 +3,7 @@
 //
 
 #include "query.h"
+#define MAX_RESEND_TIMES 10
 
 
 /************************************ Public ************************************/
@@ -134,10 +135,19 @@ Package Query::block_for_response() {
 Package Query::send_package(Package *p_package, bool need_response) {
 
     Signal(SIGALRM, sig_alarm);
+
+    int resend_times = 0;
+
+sendpackage:
+
     Package response_package;
     response_package.package_type = CHECK_RESPONSE;
 
-sendpackage:
+    resend_times++;
+    if (resend_times > MAX_RESEND_TIMES) {
+        response_package.package_type = ENOUGH_RESENT;
+        return response_package;
+    }
 
     // simulate a package loss
     bool missing_package = false;
@@ -182,6 +192,10 @@ int Query::send_request_packages(vector<Package> request_packages) {
         Package current_request_package = request_packages[current_package_num];
 
         Package response_package = send_package(&current_request_package, true);
+
+        if (response_package.package_type == ENOUGH_RESENT) {
+            break;
+        }
 
         // if response package is from another timestamp
         if (string(response_package.timestamp) != timestamp) {
