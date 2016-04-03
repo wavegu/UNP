@@ -12,23 +12,23 @@ Query::Query(int _sockfd, string _raw_sendline): sockfd(_sockfd), raw_query_line
 
 string Query::get_answer() {
 
-    vector<ResponsePackage> response_packages;
+    vector<Package> response_packages;
 
     // Split result string into request packages
-    vector<RequestPackage> request_packages = get_request_packages();
+    vector<Package> request_packages = get_request_packages();
 
     // Send them all
     send_request_packages(request_packages);
 
     // Now all request packages are checked by server, time to ask for the answer
     cout << "All requests checked" << endl;
-    RequestPackage ask_for_answer_package;
+    Package ask_for_answer_package;
     ask_for_answer_package.tot_package_num = request_packages.size();
-    ask_for_answer_package.request_type = ASK_FOR_ANSWER;
+    ask_for_answer_package.package_type = ASK_FOR_ANSWER;
     strcpy(ask_for_answer_package.timestamp, timestamp.c_str());
 
     // send the ask_for_answer package, wait for the first answer package
-    ResponsePackage answer_package;
+    Package answer_package;
     strcpy(answer_package.timestamp, string("a weird string").c_str());
     while (string(answer_package.timestamp) != timestamp) {
         answer_package = send_request_package(&ask_for_answer_package, true);
@@ -46,10 +46,10 @@ string Query::get_answer() {
         answers[current_answer_num] = string(answer_package.content);
         cout << "answers[" << current_answer_num << "] = " << answers[current_answer_num] << endl;
 
-        RequestPackage check_package;
+        Package check_package;
         check_package.tot_package_num = tot_answer_package_num;
         check_package.package_num = answer_package.package_num;
-        check_package.request_type = CHECK_RESPONSE;
+        check_package.package_type = CHECK_RESPONSE;
         strcpy(check_package.content, answer_package.content);
         send_request_package(&check_package, false);
 
@@ -72,17 +72,17 @@ string Query::get_answer() {
 
 /************************************ Private ************************************/
 
-RequestPackage Query::string_to_package(string s) {
+Package Query::string_to_package(string s) {
 
     if (s.size() > PACKAGE_CONTENT_LEN) {
         cout << "error in string_to_package" << endl;
-        return *((RequestPackage*)NULL);
+        return *((Package*)NULL);
     }
 
-    RequestPackage request_package;
+    Package request_package;
     request_package.package_num       = -1;
     request_package.tot_package_num   = -1;
-    request_package.request_type      = REQUEST_PACKAGE;
+    request_package.package_type      = REQUEST_PACKAGE;
     strcpy(request_package.content,   s.c_str() );
     strcpy(request_package.timestamp, timestamp.c_str());
 
@@ -90,9 +90,9 @@ RequestPackage Query::string_to_package(string s) {
 }
 
 
-vector<RequestPackage> Query::get_request_packages() {
+vector<Package> Query::get_request_packages() {
 
-    vector<RequestPackage> packages;
+    vector<Package> packages;
 
     int start_pos = 0;
     string tem = raw_query_line.substr(start_pos, PACKAGE_CONTENT_LEN);
@@ -119,40 +119,57 @@ vector<RequestPackage> Query::get_request_packages() {
 }
 
 
-ResponsePackage Query::block_for_response() {
+Package Query::block_for_response() {
     char recvline[MAXLINE+1];
     bzero(recvline, sizeof(recvline));
 
     Read(sockfd, recvline, MAXLINE+1);  // block
-    ResponsePackage response_package;
-    response_package = *((ResponsePackage*)recvline);
+    Package response_package;
+    response_package = *((Package*)recvline);
 
     return response_package;
 }
 
 
-ResponsePackage Query::send_request_package(RequestPackage *p_package, bool need_response) {
+Package Query::send_request_package(Package *p_package, bool need_response) {
+
+    Signal(SIGALRM, sig_alarm);
+    Package response_package;
+    response_package.package_type = CHECK_RESPONSE;
+
+sendpackage:
 
     // send the package
     cout << "sending request package: " << p_package->content << endl;
+
+    // simulate a package loss
+    if (is_package_missing()) {
+        cout << "oops, check package missing" << endl;
+        return response_package;
+    }
+
     Write(sockfd, (char*) p_package, sizeof(*p_package));
 
     if (! need_response) {
-        ResponsePackage empty_package;
-        empty_package.response_type = EMPTY_PACKAGE;
-        return empty_package;
+        return response_package;
 
     }
 
     // wait for response
     // TODO:timeout, resend
-    ResponsePackage response_package = block_for_response();
-    
+    alarm(WAIT_TIME);
+    if (sigsetjmp(jumpbuf, 1) != 0) {
+        cout << "TIME OUT" << endl;
+        goto sendpackage;
+    }
+
+    response_package = block_for_response();
+    alarm(0);
     return response_package;
 }
 
 
-int Query::send_request_packages(vector<RequestPackage> request_packages) {
+int Query::send_request_packages(vector<Package> request_packages) {
     int tot_package_num = (int)request_packages.size();
 
     // Send packages
@@ -161,15 +178,15 @@ int Query::send_request_packages(vector<RequestPackage> request_packages) {
 
     while (true) {
         // Send the current package
-        RequestPackage current_request_package = request_packages[current_package_num];
+        Package current_request_package = request_packages[current_package_num];
 
-        ResponsePackage response_package = send_request_package(&current_request_package, true);
+        Package response_package = send_request_package(&current_request_package, true);
 
         // Check current request package
-        if (response_package.response_type != CHECK_REQUEST
+        if (response_package.package_type != CHECK_REQUEST
             || response_package.package_num != current_request_package.package_num
             || strcmp(response_package.content, current_request_package.content) != 0){
-            cout << "type wrong" << response_package.response_type << ' ' << CHECK_REQUEST << endl;
+            cout << "type wrong" << response_package.package_type << ' ' << CHECK_REQUEST << endl;
             continue;
         }
 

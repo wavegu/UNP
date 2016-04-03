@@ -21,6 +21,8 @@ int main() {
     servaddr.sin_port = htons(SERV_PORT);
 
     Bind(sockfd, (SA*) &servaddr, sizeof(servaddr));
+
+    srand((unsigned int)time(NULL));
     Operator op = Operator(sockfd, (SA*) &cliaddr, sizeof(cliaddr));
     op.run();
 
