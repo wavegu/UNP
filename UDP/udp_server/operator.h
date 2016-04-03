@@ -15,7 +15,7 @@ extern "C"{
 #include <vector>
 #include <iostream>
 
-#define PACKAGE_CONTENT_LEN 1024
+#define PACKAGE_CONTENT_LEN 3
 
 
 enum RequestType {
@@ -26,8 +26,9 @@ enum RequestType {
 
 
 enum ResponseType {
-    RESPONSE_PACKAGE = 0,       // I'm a package
-    CHECK_REQUEST = 1           // I've got your request package
+    RESPONSE_PACKAGE,       // I'm a package
+    CHECK_REQUEST,          // I've got your request package
+    EMPTY_PACKAGE
 };
 
 
@@ -60,13 +61,13 @@ private:
     void send_package(ResponsePackage*);
     void send_response_packages(std::vector<ResponsePackage>);
     ResponsePackage string_to_package(std::string, std::string);
+    std::string get_url_string(RequestPackage);
     std::vector<ResponsePackage> get_answer_packages(std::string, std::string);
 
 public:
     Operator(int sockfd, SA *pcliaddr, socklen_t clilen);
     ~Operator();
     void run();
-    std::string get_url_string(RequestPackage);
 };
 
 #endif //UDP_SERVER_RESPONSE_H

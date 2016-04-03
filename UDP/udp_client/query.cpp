@@ -5,12 +5,13 @@
 #include "query.h"
 
 
+/************************************ Public ************************************/
+
 Query::Query(int _sockfd, string _raw_sendline): sockfd(_sockfd), raw_query_line(_raw_sendline) { }
 
 
 string Query::get_answer() {
 
-    string answer = "";
     vector<ResponsePackage> response_packages;
 
     // Split result string into request packages
@@ -20,16 +21,56 @@ string Query::get_answer() {
     send_request_packages(request_packages);
 
     // Now all request packages are checked by server, time to ask for the answer
+    cout << "All requests checked" << endl;
     RequestPackage ask_for_answer_package;
     ask_for_answer_package.tot_package_num = request_packages.size();
     ask_for_answer_package.request_type = ASK_FOR_ANSWER;
     strcpy(ask_for_answer_package.timestamp, timestamp.c_str());
-    cout << int(ask_for_answer_package.request_type) << "Asking for answer" << endl;
-    send_package(&ask_for_answer_package);
+
+    // send the ask_for_answer package, wait for the first answer package
+    ResponsePackage answer_package;
+    strcpy(answer_package.timestamp, string("a weird string").c_str());
+    while (string(answer_package.timestamp) != timestamp) {
+        answer_package = send_request_package(&ask_for_answer_package, true);
+    }
+
+    // now the response_package is the first answer package
+    int current_answer_num = answer_package.package_num;
+    int tot_answer_package_num = answer_package.tot_package_num;
+    answers = new string[answer_package.tot_package_num];
+
+
+    while (true) {
+
+        current_answer_num = answer_package.package_num;
+        answers[current_answer_num] = string(answer_package.content);
+        cout << "answers[" << current_answer_num << "] = " << answers[current_answer_num] << endl;
+
+        RequestPackage check_package;
+        check_package.tot_package_num = tot_answer_package_num;
+        check_package.package_num = answer_package.package_num;
+        check_package.request_type = CHECK_RESPONSE;
+        strcpy(check_package.content, answer_package.content);
+        send_request_package(&check_package, false);
+
+        if (current_answer_num >= tot_answer_package_num - 1) {
+            break;
+        }
+
+        answer_package = block_for_response();
+    }
+
+    // put together the final answer
+    string answer = "";
+    for (int i = 0; i < tot_answer_package_num; i++) {
+        answer += answers[i];
+    }
 
     return answer;
 }
 
+
+/************************************ Private ************************************/
 
 RequestPackage Query::string_to_package(string s) {
 
@@ -78,12 +119,40 @@ vector<RequestPackage> Query::get_request_packages() {
 }
 
 
-void Query::send_package(RequestPackage *p_package) {
-    Write(sockfd, (char*) p_package, sizeof(*p_package));
+ResponsePackage Query::block_for_response() {
+    char recvline[MAXLINE+1];
+    bzero(recvline, sizeof(recvline));
+
+    Read(sockfd, recvline, MAXLINE+1);  // block
+    ResponsePackage response_package;
+    response_package = *((ResponsePackage*)recvline);
+
+    return response_package;
 }
 
 
-void Query::send_request_packages(vector<RequestPackage> request_packages) {
+ResponsePackage Query::send_request_package(RequestPackage *p_package, bool need_response) {
+
+    // send the package
+    cout << "sending request package: " << p_package->content << endl;
+    Write(sockfd, (char*) p_package, sizeof(*p_package));
+
+    if (! need_response) {
+        ResponsePackage empty_package;
+        empty_package.response_type = EMPTY_PACKAGE;
+        return empty_package;
+
+    }
+
+    // wait for response
+    // TODO:timeout, resend
+    ResponsePackage response_package = block_for_response();
+    
+    return response_package;
+}
+
+
+int Query::send_request_packages(vector<RequestPackage> request_packages) {
     int tot_package_num = (int)request_packages.size();
 
     // Send packages
@@ -94,20 +163,9 @@ void Query::send_request_packages(vector<RequestPackage> request_packages) {
         // Send the current package
         RequestPackage current_request_package = request_packages[current_package_num];
 
-        cout << "sending " << current_request_package.content << endl;
-
-        send_package(&current_request_package);
-
-        // Get response
-        bzero(recvline, sizeof(recvline));
-        Read(sockfd, recvline, MAXLINE+1);
-
-        // Timeout?
+        ResponsePackage response_package = send_request_package(&current_request_package, true);
 
         // Check current request package
-        ResponsePackage response_package = *((ResponsePackage*)recvline);
-        printf("[%d] %s\n", response_package.response_type, response_package.content);
-
         if (response_package.response_type != CHECK_REQUEST
             || response_package.package_num != current_request_package.package_num
             || strcmp(response_package.content, current_request_package.content) != 0){
@@ -123,4 +181,6 @@ void Query::send_request_packages(vector<RequestPackage> request_packages) {
         // move to next package
         current_package_num ++;
     }
+
+    return 0;
 }

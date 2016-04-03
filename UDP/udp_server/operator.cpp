@@ -5,6 +5,7 @@
 #include "operator.h"
 using namespace std;
 
+/************************************ Public ************************************/
 
 Operator::Operator(int sockfd, SA *pcliaddr, socklen_t clilen) {
     this->sockfd = sockfd;
@@ -23,6 +24,49 @@ Operator::~Operator() {
     }
 }
 
+
+void Operator::run() {
+    socklen_t len;
+    char buffer[MAXLINE];
+
+    while (TRUE){
+        bzero(buffer, MAXLINE);
+        len = clilen;
+        cout << "waiting..." << endl;
+        Recvfrom(sockfd, buffer, MAXLINE, 0, pcliaddr, &len);
+        RequestPackage request_package = *((RequestPackage*)buffer);
+        cout << "request content is " << request_package.content << endl;
+        ResponsePackage response_package;
+
+        switch (request_package.request_type) {
+
+            case REQUEST_PACKAGE:
+                add_rawstring(request_package);
+                response_package.response_type = CHECK_REQUEST;
+                response_package.package_num = request_package.package_num;
+                response_package.tot_package_num = request_package.tot_package_num;
+                strcpy(response_package.timestamp, request_package.timestamp);
+                strcpy(response_package.content, request_package.content);
+                send_package(&response_package);
+                break;
+
+            case CHECK_RESPONSE:
+                break;
+
+            case ASK_FOR_ANSWER:
+                cout << "sending answer now" << endl;
+                string url_string = get_url_string(request_package);
+                vector<ResponsePackage> answer_packages = get_answer_packages(url_string, request_package.timestamp);
+                send_response_packages(answer_packages);
+                break;
+        }
+
+        if (string(request_package.content) == "bye\n")
+            break;
+    }
+}
+
+/************************************ Private ************************************/
 
 void Operator::add_rawstring(RequestPackage request_package) {
     // a new request session
@@ -99,7 +143,7 @@ vector<ResponsePackage> Operator::get_answer_packages(string url_string, string 
 
 
 void Operator::send_package(ResponsePackage *p_package) {
-    Write(sockfd, (char*) p_package, sizeof(*p_package));
+    Sendto(sockfd, (char*) p_package, sizeof(*p_package), 0, pcliaddr, clilen);
 }
 
 
@@ -132,7 +176,7 @@ void Operator::send_response_packages(vector<ResponsePackage> response_packages)
             || check_package.package_num != current_response_package.package_num
             || strcmp(check_package.content, current_response_package.content) != 0){
             cout << "type wrong" << check_package.request_type << ' ' << CHECK_REQUEST << endl;
-            continue;
+            break;
         }
 
         cout << "ok" << endl;
@@ -142,46 +186,5 @@ void Operator::send_response_packages(vector<ResponsePackage> response_packages)
 
         // move to next package
         current_package_num ++;
-    }
-}
-
-
-void Operator::run() {
-    socklen_t len;
-    char buffer[MAXLINE];
-
-    while (TRUE){
-        bzero(buffer, MAXLINE);
-        len = clilen;
-        cout << "waiting..." << endl;
-        Recvfrom(sockfd, buffer, MAXLINE, 0, pcliaddr, &len);
-        RequestPackage request_package = *((RequestPackage*)buffer);
-        ResponsePackage response_package;
-
-        switch (request_package.request_type) {
-
-            case REQUEST_PACKAGE:
-                add_rawstring(request_package);
-                response_package.response_type = CHECK_REQUEST;
-                response_package.package_num = request_package.package_num;
-                response_package.tot_package_num = request_package.tot_package_num;
-                strcpy(response_package.timestamp, request_package.timestamp);
-                strcpy(response_package.content, request_package.content);
-                break;
-
-            case CHECK_RESPONSE:
-                break;
-
-            case ASK_FOR_ANSWER:
-                string url_string = get_url_string(request_package);
-                vector<ResponsePackage> answer_packages = get_answer_packages(url_string, request_package.timestamp);
-                cout << url_string << endl;
-                break;
-        }
-
-        Sendto(sockfd, (char*) &response_package, sizeof(response_package), 0, pcliaddr, clilen);
-
-        if (string(request_package.content) == "bye\n")
-            break;
     }
 }

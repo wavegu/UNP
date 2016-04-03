@@ -13,7 +13,7 @@ extern "C"{
 #include <vector>
 #include <iostream>
 using namespace std;
-#define PACKAGE_CONTENT_LEN 1024
+#define PACKAGE_CONTENT_LEN 3
 
 
 enum RequestType {
@@ -24,8 +24,9 @@ enum RequestType {
 
 
 enum ResponseType {
-    RESPONSE_PACKAGE = 0,       // I'm a package
-    CHECK_REQUEST = 1           // I've got your request package
+    RESPONSE_PACKAGE,       // I'm a package
+    CHECK_REQUEST,          // I've got your request package
+    EMPTY_PACKAGE
 };
 
 
@@ -54,14 +55,18 @@ private:
     int     sockfd;
     string  raw_query_line = "";
     string  timestamp = get_timestamp();
+    string  *answers;
+
+    RequestPackage          string_to_package(string);
+    vector<RequestPackage>  get_request_packages();
+    ResponsePackage         block_for_response();
+    ResponsePackage         send_request_package(RequestPackage *p_package, bool need_response);
+    int                     send_request_packages(vector<RequestPackage>);
 
 public:
     Query(int _sockfd, string _raw_query_line);
+    ~Query() { delete []answers; }
     string                  get_answer();
-    RequestPackage          string_to_package(string);
-    vector<RequestPackage>  get_request_packages();
-    void                    send_package(RequestPackage*);
-    void                    send_request_packages(vector<RequestPackage>);
 };
 
 
