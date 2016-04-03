@@ -177,15 +177,17 @@ sendpackage:
     Package response_package;
     response_package.package_type = EMPTY_PACKAGE;
 
-//    // simulate a package loss
-//    if (is_package_missing()) {
-//        cout << get_timestamp() << " | " << "oops, check package missing" << endl;
-//        return response_package;
-//    }
+    // simulate a package loss
+    bool missing_package = false;
+    if (is_package_missing()) {
+        cout << get_timestamp() << " | " << "oops, check package missing" << endl;
+        missing_package = true;
+    }
 
     // send the package
     cout << get_timestamp() << " | " << p_package->package_type << " sending " << p_package->content << ' ' << p_package->timestamp << endl;
-    Sendto(sockfd, (char*) p_package, sizeof(*p_package), 0, pcliaddr, clilen);
+    if (! missing_package)
+        Sendto(sockfd, (char*) p_package, sizeof(*p_package), 0, pcliaddr, clilen);
 
     // if dont need response, return
     if (! need_response) {
