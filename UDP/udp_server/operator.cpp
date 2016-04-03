@@ -18,7 +18,7 @@ Operator::~Operator() {
     map<string, string*>::iterator it;
     for (it = timestamp_to_rawstrings.begin(); it != timestamp_to_rawstrings.end(); it++) {
         if (it->second) {
-            cout << "deleting key: " << it->first << endl;
+            cout << get_timestamp() << " | " << "deleting key: " << it->first << endl;
             delete []it->second;
         }
     }
@@ -32,16 +32,15 @@ void Operator::run() {
     while (TRUE){
         bzero(buffer, MAXLINE);
         len = clilen;
-        cout << "waiting..." << endl;
+        cout << get_timestamp() << " | " << "waiting..." << endl;
         Recvfrom(sockfd, buffer, MAXLINE, 0, pcliaddr, &len);
         Package request_package = *((Package*)buffer);
-        cout << "request content is " << request_package.content << endl;
         Package response_package;
 
         switch (request_package.package_type) {
 
             case REQUEST_PACKAGE: {
-                cout << "getting request" << endl;
+                cout << get_timestamp() << " | " << "getting request " << request_package.content << ' ' << request_package.timestamp << endl;
                 add_rawstring(request_package);
                 response_package.package_type = CHECK_REQUEST;
                 response_package.package_num = request_package.package_num;
@@ -54,14 +53,21 @@ void Operator::run() {
                 break;
             }
 
-            case CHECK_RESPONSE:
+            case CHECK_RESPONSE: {
+                cout << get_timestamp() << " | " << "An ack: " << request_package.timestamp << endl;
                 break;
+            }
 
             case ASK_FOR_ANSWER: {
-                cout << "sending answer now" << endl;
+                cout << get_timestamp() << " | " << "An ask for answer" << endl;
                 string url_string = get_url_string(request_package);
                 vector<Package> answer_packages = get_answer_packages(url_string, request_package.timestamp);
                 send_response_packages(answer_packages);
+                break;
+            }
+
+            case END_OF_SESSION: {
+                cout << get_timestamp() << " | " << "END OF SESSION" << endl;
                 break;
             }
 
@@ -83,19 +89,18 @@ void Operator::add_rawstring(Package request_package) {
         timestamp_to_rawstrings[timestamp] = new string[request_package.tot_package_num];
     }
     // add raw string anyway
-    cout << "adding raw string: " << timestamp << ' ' << request_package.content << endl;
     timestamp_to_rawstrings[timestamp][request_package.package_num] = string(request_package.content);
 }
 
 
 string Operator::get_url_string(Package ask_for_answer_package) {
     string timestamp = string(ask_for_answer_package.timestamp);
-    cout << "getting url:" << timestamp << endl;
+    cout << get_timestamp() << " | " << "getting url:" << timestamp << endl;
     int tot_package_num = ask_for_answer_package.tot_package_num;
-    cout << "package num = " << tot_package_num << ' ' << timestamp_to_rawstrings[timestamp][0] << endl;
+    cout << get_timestamp() << " | " << "package num = " << tot_package_num << ' ' << timestamp_to_rawstrings[timestamp][0] << endl;
     string raw_string = "";
     for (int i = 0; i < tot_package_num; i++) {
-        cout << i << endl;
+        cout << get_timestamp() << " | " << i << endl;
         raw_string += timestamp_to_rawstrings[timestamp][i];
     }
 
@@ -108,7 +113,6 @@ Package Operator::string_to_package(string s, string timestamp) {
     if (s.size() > PACKAGE_CONTENT_LEN) {
         Package empty_package;
         empty_package.package_type = EMPTY_PACKAGE;
-        cout << "error in string_to_package" << endl;
         return empty_package;
     }
 
@@ -173,13 +177,14 @@ sendpackage:
     Package response_package;
     response_package.package_type = EMPTY_PACKAGE;
 
-    // simulate a package loss
-    if (is_package_missing()) {
-        cout << "oops, check package missing" << endl;
-        return response_package;
-    }
+//    // simulate a package loss
+//    if (is_package_missing()) {
+//        cout << get_timestamp() << " | " << "oops, check package missing" << endl;
+//        return response_package;
+//    }
 
     // send the package
+    cout << get_timestamp() << " | " << p_package->package_type << " sending " << p_package->content << ' ' << p_package->timestamp << endl;
     Sendto(sockfd, (char*) p_package, sizeof(*p_package), 0, pcliaddr, clilen);
 
     // if dont need response, return
@@ -190,7 +195,7 @@ sendpackage:
 
     alarm(WAIT_TIME);
     if (sigsetjmp(jumpbuf, 1) != 0) {
-        cout << "TIME OUT" << endl;
+        cout << get_timestamp() << " | " << "TIME OUT" << endl;
         goto sendpackage;
     }
 
@@ -212,21 +217,26 @@ void Operator::send_response_packages(vector<Package> response_packages) {
         // Send the current package
         Package current_response_package = response_packages[current_package_num];
 
-        cout << "sending " << current_response_package.content << endl;
+        cout << get_timestamp() << " | " << "sending " << current_response_package.content << endl;
 
         // need response, and resend if timeout
         Package check_package = send_package(&current_response_package, true);
+
+        if (check_package.package_type == END_OF_SESSION) {
+            cout << get_timestamp() << " | " << "END OF SESSION" << endl;
+            return;
+        }
 
         printf("[%d] %s\n", check_package.package_type, check_package.content);
 
         if ((check_package.package_type != CHECK_RESPONSE && check_package.package_type != EMPTY_PACKAGE)
             || check_package.package_num != current_response_package.package_num
             || strcmp(check_package.content, current_response_package.content) != 0){
-            cout << "type wrong" << check_package.package_type << ' ' << CHECK_REQUEST << ' ' << EMPTY_PACKAGE << endl;
-            continue;
+            cout << get_timestamp() << " | " << "type wrong" << check_package.package_type << ' ' << (check_package.package_num != current_response_package.package_num) << ' ' << (strcmp(check_package.content, current_response_package.content) != 0) << endl;
+            break;
         }
 
-        cout << "ok" << endl;
+        cout << get_timestamp() << " | " << "ok" << endl;
 
         if (check_package.package_num == tot_package_num - 1)
             break;
@@ -234,4 +244,9 @@ void Operator::send_response_packages(vector<Package> response_packages) {
         // move to next package
         current_package_num ++;
     }
+
+    // send a final ack
+    // Without this, if the last ack from client lost, client won't be aware and the server will resend the last package again and again
+
+
 }

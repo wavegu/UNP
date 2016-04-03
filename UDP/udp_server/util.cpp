@@ -31,7 +31,6 @@ string urlencode(string raw_line){
 
 bool is_package_missing() {
     int dice = random(10);
-    cout << "dice = " << dice << endl;
     if (dice < 3) {
         return true;
     }

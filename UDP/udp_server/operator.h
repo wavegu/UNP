@@ -25,7 +25,8 @@ enum PackageType {
     CHECK_REQUEST,          // I've got your request package
     CHECK_RESPONSE,         // I've got your response package
     ASK_FOR_ANSWER,
-    EMPTY_PACKAGE
+    EMPTY_PACKAGE,
+    END_OF_SESSION
 };
 
 

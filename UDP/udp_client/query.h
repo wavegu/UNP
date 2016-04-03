@@ -23,7 +23,8 @@ enum PackageType {
     CHECK_REQUEST,          // I've got your request package
     CHECK_RESPONSE,         // I've got your response package
     ASK_FOR_ANSWER,
-    EMPTY_PACKAGE
+    EMPTY_PACKAGE,
+    END_OF_SESSION
 };
 
 
@@ -46,8 +47,8 @@ private:
     Package             string_to_package(string);
     vector<Package>     get_request_packages();
     Package             block_for_response();
-    Package             send_request_package(Package *p_package, bool need_response);
-    int                     send_request_packages(vector<Package>);
+    Package             send_package(Package *p_package, bool need_response);
+    int                 send_request_packages(vector<Package>);
 
 public:
     Query(int _sockfd, string _raw_query_line);

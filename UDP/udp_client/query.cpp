@@ -21,7 +21,7 @@ string Query::get_answer() {
     send_request_packages(request_packages);
 
     // Now all request packages are checked by server, time to ask for the answer
-    cout << "All requests checked" << endl;
+    cout << get_timestamp() << " | " << "All requests checked" << endl;
     Package ask_for_answer_package;
     ask_for_answer_package.tot_package_num = request_packages.size();
     ask_for_answer_package.package_type = ASK_FOR_ANSWER;
@@ -31,7 +31,7 @@ string Query::get_answer() {
     Package answer_package;
     strcpy(answer_package.timestamp, string("a weird string").c_str());
     while (string(answer_package.timestamp) != timestamp) {
-        answer_package = send_request_package(&ask_for_answer_package, true);
+        answer_package = send_package(&ask_for_answer_package, true);
     }
 
     // now the response_package is the first answer package
@@ -44,14 +44,14 @@ string Query::get_answer() {
 
         current_answer_num = answer_package.package_num;
         answers[current_answer_num] = string(answer_package.content);
-        cout << "answers[" << current_answer_num << "] = " << answers[current_answer_num] << endl;
+        cout << get_timestamp() << " | " << "answers[" << current_answer_num << "] = " << answers[current_answer_num] << endl;
 
         Package check_package;
         check_package.tot_package_num = tot_answer_package_num;
         check_package.package_num = answer_package.package_num;
         check_package.package_type = CHECK_RESPONSE;
         strcpy(check_package.content, answer_package.content);
-        send_request_package(&check_package, false);
+        send_package(&check_package, false);
 
         if (current_answer_num >= tot_answer_package_num - 1) {
             break;
@@ -75,7 +75,7 @@ string Query::get_answer() {
 Package Query::string_to_package(string s) {
 
     if (s.size() > PACKAGE_CONTENT_LEN) {
-        cout << "error in string_to_package" << endl;
+        cout << get_timestamp() << " | " << "error in string_to_package" << endl;
         return *((Package*)NULL);
     }
 
@@ -131,7 +131,7 @@ Package Query::block_for_response() {
 }
 
 
-Package Query::send_request_package(Package *p_package, bool need_response) {
+Package Query::send_package(Package *p_package, bool need_response) {
 
     Signal(SIGALRM, sig_alarm);
     Package response_package;
@@ -139,27 +139,28 @@ Package Query::send_request_package(Package *p_package, bool need_response) {
 
 sendpackage:
 
-    // send the package
-    cout << "sending request package: " << p_package->content << endl;
-
     // simulate a package loss
+    bool missing_package = false;
     if (is_package_missing()) {
-        cout << "oops, check package missing" << endl;
-        return response_package;
+        cout << get_timestamp() << " | " << "oops, check package missing" << endl;
+        missing_package = true;
     }
 
-    Write(sockfd, (char*) p_package, sizeof(*p_package));
+    // send the package
+    cout << get_timestamp() << " | " << "sending request package: " << p_package->content << endl;
+
+    if (! missing_package)
+        Write(sockfd, (char*) p_package, sizeof(*p_package));
 
     if (! need_response) {
         return response_package;
-
     }
 
     // wait for response
     // TODO:timeout, resend
     alarm(WAIT_TIME);
     if (sigsetjmp(jumpbuf, 1) != 0) {
-        cout << "TIME OUT" << endl;
+        cout << get_timestamp() << " | " << "TIME OUT" << endl;
         goto sendpackage;
     }
 
@@ -180,17 +181,30 @@ int Query::send_request_packages(vector<Package> request_packages) {
         // Send the current package
         Package current_request_package = request_packages[current_package_num];
 
-        Package response_package = send_request_package(&current_request_package, true);
+        Package response_package = send_package(&current_request_package, true);
+
+        // if response package is from another timestamp
+        if (string(response_package.timestamp) != timestamp) {
+            cout << "sending ENDOFSESSION" << endl;
+            Package ack;
+            ack.package_type = END_OF_SESSION;
+            ack.package_num = response_package.package_num;
+            ack.tot_package_num = response_package.tot_package_num;
+            strcpy(ack.content, response_package.content);
+            strcpy(ack.timestamp, response_package.timestamp);
+            send_package(&ack, false);
+            continue;
+        }
 
         // Check current request package
         if (response_package.package_type != CHECK_REQUEST
             || response_package.package_num != current_request_package.package_num
             || strcmp(response_package.content, current_request_package.content) != 0){
-            cout << "type wrong" << response_package.package_type << ' ' << CHECK_REQUEST << endl;
+            cout << get_timestamp() << " | " << "type wrong" << response_package.package_type << ' ' << CHECK_REQUEST << endl;
             continue;
         }
 
-        cout << "ok" << endl;
+        cout << get_timestamp() << " | " << "ok" << endl;
 
         if (response_package.package_num == tot_package_num - 1)
             break;
@@ -201,3 +215,50 @@ int Query::send_request_packages(vector<Package> request_packages) {
 
     return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
