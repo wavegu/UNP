@@ -14,7 +14,6 @@ void udp_session(FILE *fp, int sockfd, const SA *pservaddr, socklen_t servlen){
      * and output the response */
 
     while (Fgets(sendline, MAXLINE, fp) != NULL){
-        cout << get_timestamp() << " | " << "querying for " << sendline;
         Query query = Query(sockfd, string(sendline));
         cout << get_timestamp() << " | " << query.get_answer() << endl;
         bzero(sendline, sizeof(sendline));

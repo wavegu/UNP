@@ -19,7 +19,6 @@ Operator::~Operator() {
     map<string, string*>::iterator it;
     for (it = timestamp_to_rawstrings.begin(); it != timestamp_to_rawstrings.end(); it++) {
         if (it->second) {
-            cout << get_timestamp() << " | " << "deleting key: " << it->first << endl;
             delete []it->second;
         }
     }
@@ -33,7 +32,6 @@ void Operator::run() {
     while (TRUE){
         bzero(buffer, MAXLINE);
         len = clilen;
-        cout << get_timestamp() << " | " << "waiting..." << endl;
         Recvfrom(sockfd, buffer, MAXLINE, 0, pcliaddr, &len);
         Package request_package = *((Package*)buffer);
         Package response_package;
@@ -41,7 +39,6 @@ void Operator::run() {
         switch (request_package.package_type) {
 
             case REQUEST_PACKAGE: {
-                cout << get_timestamp() << " | " << "getting request " << request_package.content << ' ' << request_package.timestamp << endl;
                 add_rawstring(request_package);
                 response_package.package_type = CHECK_REQUEST;
                 response_package.package_num = request_package.package_num;
@@ -55,29 +52,23 @@ void Operator::run() {
             }
 
             case CHECK_RESPONSE: {
-                cout << get_timestamp() << " | " << "An ack: " << request_package.timestamp << endl;
                 break;
             }
 
             case ASK_FOR_ANSWER: {
-                cout << get_timestamp() << " | " << "An ask for answer" << endl;
                 string url_string = get_url_string(request_package);
                 vector<Package> answer_packages = get_answer_packages(url_string, request_package.timestamp);
-                send_response_packages(answer_packages);
+                send_answer_packages(answer_packages);
                 break;
             }
 
             case END_OF_SESSION: {
-                cout << get_timestamp() << " | " << "END OF SESSION" << endl;
                 break;
             }
 
             default:
                 break;
         }
-
-        if (string(request_package.content) == "bye\n")
-            break;
     }
 }
 
@@ -96,12 +87,9 @@ void Operator::add_rawstring(Package request_package) {
 
 string Operator::get_url_string(Package ask_for_answer_package) {
     string timestamp = string(ask_for_answer_package.timestamp);
-    cout << get_timestamp() << " | " << "getting url:" << timestamp << endl;
     int tot_package_num = ask_for_answer_package.tot_package_num;
-    cout << get_timestamp() << " | " << "package num = " << tot_package_num << ' ' << timestamp_to_rawstrings[timestamp][0] << endl;
     string raw_string = "";
     for (int i = 0; i < tot_package_num; i++) {
-        cout << get_timestamp() << " | " << i << endl;
         raw_string += timestamp_to_rawstrings[timestamp][i];
     }
 
@@ -194,7 +182,6 @@ sendpackage:
     }
 
     // send the package
-    cout << get_timestamp() << " | " << p_package->package_type << " sending " << p_package->content << ' ' << p_package->timestamp << endl;
     if (! missing_package)
         Sendto(sockfd, (char*) p_package, sizeof(*p_package), 0, pcliaddr, clilen);
 
@@ -217,7 +204,7 @@ sendpackage:
 }
 
 
-void Operator::send_response_packages(vector<Package> response_packages) {
+void Operator::send_answer_packages(vector<Package> response_packages) {
     int tot_package_num = (int)response_packages.size();
 
     // Send packages
@@ -228,31 +215,31 @@ void Operator::send_response_packages(vector<Package> response_packages) {
         // Send the current package
         Package current_response_package = response_packages[current_package_num];
 
-        cout << get_timestamp() << " | " << "sending " << current_response_package.content << endl;
-
         // need response, and resend if timeout
         Package check_package = send_package(&current_response_package, true);
 
         if (check_package.package_type == ENOUGH_RESENT) {
-            cout << get_timestamp() << " | " << "ENOUGH RESENT" << endl;
             return;
         }
 
         if (check_package.package_type == END_OF_SESSION) {
-            cout << get_timestamp() << " | " << "END OF SESSION" << endl;
+            string to_delete_timestamp = string(check_package.timestamp);
+            map<string, string*>::iterator it;
+            it = timestamp_to_rawstrings.find(to_delete_timestamp);
+            if (it != timestamp_to_rawstrings.end()) {
+                if (timestamp_to_rawstrings[to_delete_timestamp]) {
+                    delete []timestamp_to_rawstrings[to_delete_timestamp];
+                }
+                timestamp_to_rawstrings.erase(it);
+            }
             return;
         }
-
-        printf("[%d] %s\n", check_package.package_type, check_package.content);
 
         if ((check_package.package_type != CHECK_RESPONSE && check_package.package_type != EMPTY_PACKAGE)
             || check_package.package_num != current_response_package.package_num
             || strcmp(check_package.content, current_response_package.content) != 0){
-            cout << get_timestamp() << " | " << "type wrong" << check_package.package_type << ' ' << (check_package.package_num != current_response_package.package_num) << ' ' << (strcmp(check_package.content, current_response_package.content) != 0) << endl;
             break;
         }
-
-        cout << get_timestamp() << " | " << "ok" << endl;
 
         if (check_package.package_num == tot_package_num - 1)
             break;
