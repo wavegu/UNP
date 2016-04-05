@@ -23,37 +23,6 @@ string get_timestamp(){
     return ts;
 }
 
-string urlencode(string raw_line){
-    map<char, string> url_map;
-    url_map['!'] = "%21";
-    url_map['#'] = "%23";
-    url_map['$'] = "%24";
-    url_map['&'] = "%26";
-    url_map['\''] = "%27";
-    url_map['('] = "%28";
-    url_map[')'] = "%29";
-    url_map['*'] = "%2A";
-    url_map['+'] = "%2B";
-    url_map[','] = "%2C";
-    url_map['/'] = "%2F";
-    url_map[':'] = "%3A";
-    url_map[';'] = "%3B";
-    url_map['='] = "%3D";
-    url_map['?'] = "%3F";
-    url_map['@'] = "%40";
-    url_map['['] = "%5B";
-    url_map[']'] = "%5D";
-    string result = "";
-    int len = raw_line.length();
-    for (int i = 0; i < len; i++) {
-        if (url_map.find(raw_line[i]) != url_map.end()) {
-            result += url_map[raw_line[i]];
-        } else {
-            result.append(1, raw_line[i]);
-        }
-    }
-    return result;
-}
 
 
 bool is_package_missing() {
