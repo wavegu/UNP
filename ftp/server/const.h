@@ -14,7 +14,9 @@ namespace rtn {
     int PACKAGE_IDENT_INCONSISTENT = 1007;
     int PACKAGE_CKSUM_INCONSISTENT = 1008;
 
-    int FILE_DONT_EXIST = 1009;
+    int CMD_DONT_EXIST  = 1009;
+    int FILE_DONT_EXIST = 1010;
+    int CLIENT_QUIT = 1011;
 }
 
 namespace ptype {
@@ -23,6 +25,7 @@ namespace ptype {
     uint16_t CLIENT_DATA_PACKAGE = 3;
     uint16_t SERVER_DATA_PACKAGE = 4;
     uint16_t SERVER_EOF_PACKAGE = 5;
+    uint16_t SERVER_BYE_PACKAGE = 6;
 }
 
 #endif // RTN_CODE

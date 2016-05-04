@@ -43,9 +43,13 @@ int server_Thread::sendFile(uint16_t ident){
         cout << "[ERROR]@server_Thread::sendFile recv target filename fails! " << ret << endl;
         return ret;
     }
+    char filename[BIGSIZE];
+    clean(filename);
+    strcpy(filename, package.data);
+
     //发送文件存在确认
     clean(buff);
-    if (!fileExist(package.data)){
+    if (!fileExist(filename)){
         string tem = "[SERVER]file not found";
         strcpy(buff,tem.c_str());
         ret = sendPackage(datvisitor, &package, buff, strlen(buff), ptype::SERVER_DATA_PACKAGE, ident);
@@ -55,6 +59,7 @@ int server_Thread::sendFile(uint16_t ident){
         }
     }
     char reply[BIGSIZE];
+    clean(reply);
     string tem = "[SERVER]file ready!";
     strcpy(reply,tem.c_str());
     ret = sendPackage(datvisitor, &package, reply, strlen(reply), ptype::SERVER_DATA_PACKAGE, ident);
@@ -63,16 +68,18 @@ int server_Thread::sendFile(uint16_t ident){
         return ret;
     }
     //发送文件
-    int file = open(buff, O_RDONLY);
+    int file = open(filename, O_RDONLY);
     clean(buff);
     int len;
     while(len = read(file,buff,BIGSIZE)){
         ret = sendPackage(datvisitor, &package, buff, PACKAGE_DATA_SIZE, ptype::SERVER_DATA_PACKAGE, ident);
+        cout << len << "after sending file content " << buff << endl;
         if (ret != rtn::SUCCESS) {
             close(file);
             cout << "[ERROR]@server_Thread::sendFile when sending file! " << ret << endl;
             return ret;
         }
+        clean(buff);
         if (len < BIGSIZE)  break;
     }
     //发送终止包
@@ -220,67 +227,79 @@ int server_Thread::changeDir(uint16_t ident){
 int server_Thread::clientQuit(uint16_t ident){
     //发送响应类型
     char buff[BIGSIZE] = "quit";
-    int ret = write(cmdvisitor,buff,sizeof(buff));
-    if (ret < 0){
-        cout << "[WARNING]client quitting fails" << endl;
-        return 0;
+    Package byePackage;
+    int ret = sendPackage(cmdvisitor, &byePackage, buff, strlen(buff), ptype::SERVER_CMD_PACKAGE, ident);
+    if (ret != rtn::SUCCESS){
+        cout << "[ERROR]@server_Thread::clientQuit quitting fails" << endl;
+        return ret;
     }
     cout << "[STATE]client quits!" << endl;
-    return 1;
+    return rtn::SUCCESS;
 }
 
 /*判断命令类型,送入对应函数*/
 int server_Thread::deal_with_cmd(Package cmdPackage){
 
+    int ret;
     string cmd = (string)cmdPackage.data;
     uint16_t ident = ntohs(cmdPackage.ident);
 
     if (cmd == "get"){
-        if (! sendFile(ident)){
+        ret = sendFile(ident);
+        if (ret != rtn::SUCCESS){
             cout << "[WARNING]sending file fails" << endl;
-            return 0;
+            return ret;
         }
-        return 1;
+        return rtn::SUCCESS;
     }
     if (cmd == "pwd"){
-        if (! showDir(ident)){
+        ret = showDir(ident);
+        if (ret != rtn::SUCCESS){
             cout << "[WARNING]showing current dir fails" << endl;
-            return 0;
+            return ret;
         }
-        return 1;
+        return rtn::SUCCESS;
     }
     if (cmd == "ls"){
-        if (! listDir(ident)){
+        ret = listDir(ident);
+        if (ret != rtn::SUCCESS){
             cout << "[WARNING]listing dir fails" << endl;
-            return 0;
+            return ret;
         }
-        return 1;
+        return rtn::SUCCESS;
     }
     if (cmd == "cd" ){
-        if (! changeDir(ident)){
+        ret = changeDir(ident);
+        if (ret != rtn::SUCCESS){
             cout << "[WARNING]changing dir fails" << endl;
-            return 0;
+            return ret;
         }
-        return 1;
+        return rtn::SUCCESS;
     }
     if (cmd == "?" || cmd == "help"){
-        if (! listCmd(ident)){
+        ret = listCmd(ident);
+        if (ret != rtn::SUCCESS){
             cout << "[WARNING]listing cmd fails!" << endl;
-            return 0;
+            return ret;
         }
-        return 1;
+        return rtn::SUCCESS;
     }
     if (cmd == "quit"){
-        if (! clientQuit(ident)){
+        ret = clientQuit(ident);
+        if (ret != rtn::SUCCESS){
             cout << "[WARNING]quiting cmd fails!" << endl;
-            return 0;
+            return ret;
         }
-        return 1;
+        cout << "client quit ok!" << endl;
+        return rtn::CLIENT_QUIT;
     }
 
     cmd = "Wrong CMD:" + cmd;
-    write(cmdvisitor,cmd.c_str(),sizeof(cmd.c_str()));
-    return 0;
+    char buff[BIGSIZE];
+    strcpy(buff, cmd.c_str());
+    Package package;
+    sendPackage(cmdvisitor, &package, buff, strlen(buff), ptype::SERVER_CMD_PACKAGE, ident);
+    return rtn::CMD_DONT_EXIST;
 }
 
 
@@ -329,8 +348,6 @@ int server_Thread::recvPackage(SOCKET sock, Package *package) {
         return rtn::PACKAGE_IDENT_INCONSISTENT;
     }
     // 检查checksum
-    cout << "checking " << ret << endl;
-    cout << package->ident << " version=" << package->version << " ap=" << package->auth_protocol << " data=" << package->data << endl;
     uint16_t checksum = ntohs(package->checksum);
     package->checksum = 0;
     if (checksum != calc_checksum((uint8_t*)package, ret)){
@@ -359,20 +376,6 @@ void server_Thread::run(){
         }
 
         Package clientCmdPackage;
-//        int len = read(cmdvisitor,&clientCmdPackage,sizeof(clientCmdPackage));
-
-//        if (len < 0){
-//            cout << "[ERROR]@server_Thread::run server reading cmd fails!" << endl;
-//            retry++;
-//            continue;
-//        }
-
-//        if (len < PACKAGE_HEAD_SIZE){
-//            cout << "[ERROR]@server_Thread::run cmd package too small!" << endl;
-//            retry++;
-//            continue;
-//        }
-
         int ret = recvPackage(cmdvisitor, &clientCmdPackage);
         if (ret != rtn::SUCCESS){
             retry++;
@@ -388,8 +391,8 @@ void server_Thread::run(){
 
         retry = 0;
 
-        int len = deal_with_cmd(clientCmdPackage);
-        if (!len)   continue;
+        ret = deal_with_cmd(clientCmdPackage);
+        if (ret == rtn::CLIENT_QUIT)    break;
     }
     close(cmdvisitor);
     close(datvisitor);

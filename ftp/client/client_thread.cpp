@@ -117,13 +117,16 @@ int client_Thread::download(uint16_t ident){
         return ret;
     }
     //接收文件存在确认
-    ret = recvPackage(datsock, &package, ident);
+    Package ckPackage;
+    ret = recvPackage(datsock, &ckPackage, ident);
+    cout << "file recving checking " << ret << endl;
+    cout << ckPackage.ident << " version=" << ckPackage.version << " ap=" << ckPackage.auth_protocol << " data=" << ckPackage.data << endl;
+
     if (ret != rtn::SUCCESS){
         cout << "[ERROR]@client_Thread::download recv filename existance fails! " << ret << endl;
         return ret;
     }
-    string tem = (string)package.data;
-    cout << tem << endl;
+    string tem = (string)ckPackage.data;
     if (tem == "[SERVER]file not found"){
         cout << "[ERROR]@client_Thread::download file not found: " << filename << endl;
         return rtn::FILE_DONT_EXIST;
@@ -135,7 +138,8 @@ int client_Thread::download(uint16_t ident){
     while(ret == rtn::SUCCESS){
         if (ntohs(filePackage.package_type) == ptype::SERVER_EOF_PACKAGE)
             break;
-        write(file,filePackage.data,PACKAGE_DATA_SIZE);
+        write(file,filePackage.data,strlen(filePackage.data));
+        cout << "writing " << filePackage.data << endl;
 //        if (strlen(filePackage.data) < PACKAGE_DATA_SIZE) break;
         ret = recvPackage(datsock, &filePackage, ident);
     }
