@@ -30,7 +30,7 @@ class server_Thread:public QThread{
 private:
     SOCKET cmdvisitor;
     SOCKET datvisitor;
-    int deal_with_cmd(std::string);
+    int deal_with_cmd(Package package);
     /*标准操作流程:
     * [1]发送一个reply
     * [2]do sth
@@ -38,14 +38,17 @@ private:
     * [1]cmd: send cmd list
     * [2]currentDir: send current dir
     */
-    int sendFile();
-    int getFile();
-    int listCmd();
-    int showDir();
-    int listDir();
-    int changeDir();
-    int clientQuit();
+    int sendFile(uint16_t ident);
+    int listCmd(uint16_t ident);
+    int showDir(uint16_t ident);
+    int listDir(uint16_t ident);
+    int changeDir(uint16_t ident);
+    int clientQuit(uint16_t ident);
+
+    int recvPackage(SOCKET sock, Package *package);
+    int sendPackage(SOCKET sock, Package *package, char *content, int slen, uint16_t package_type, uint16_t ident);
     bool fileExist(char *filename);
+    uint16_t calc_checksum(uint8_t* data, int len);
 public:
     server_Thread(SOCKET cs,SOCKET ds);
     void run();

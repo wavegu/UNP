@@ -4,177 +4,152 @@
 using namespace std;
 
 /*根据不同的reply字段,作出不同响应*/
-int client_Thread::deal_with_reply(string reply){
+int client_Thread::deal_with_reply(Package replyPackage, uint16_t ident){
+
+    if (ntohs(replyPackage.package_type) != ptype::SERVER_CMD_PACKAGE){
+        cout << "[ERROR]@client_thread::deal_with_reply package type error! " << replyPackage.package_type << endl;
+        return rtn::PACKAGE_TYPE_ERROR;
+    }
+
+    string reply = (string)replyPackage.data;
 
     if (reply == "cmd"){
-       return getCMDlist();
+       return getCMDlist(ident);
     }
 
     if (reply == "currentDir"){
-        return getcurrentDir();
+        return getcurrentDir(ident);
     }
 
     if (reply == "listDir"){
-        return getDirlist();
+        return getDirlist(ident);
     }
 
     if (reply == "cd"){
-        return changeDir();
+        return changeDir(ident);
     }
 
     if (reply == "download"){
-        return download();
-    }
-
-    if (reply == "upload"){
-        return upload();
+        return download(ident);
     }
 
     if (reply == "quit"){
-        return quit();
+        return quit(ident);
     }
 
     if (reply == "error"){
         cout << "[WARNING]wrong cmd,please try again!" << endl;
     }
-    return 0;
+
+    return rtn::UNEXPECTED_PACKAGE;
 }
 
 /*获取合法命令列表*/
-int client_Thread::getCMDlist(){
-    char buff[BIG_SIZE];
-    int ret;
-    clean(buff);
-    ret = read(datsock,buff,sizeof(buff));
-    if (ret < 0){
-        cout << "[WARNING]read cmd fails!" << endl;
-        return 0;
+int client_Thread::getCMDlist(uint16_t ident){
+    Package package;
+    int ret = recvPackage(datsock, &package, ident);
+    if (ret != rtn::SUCCESS){
+        cout << "[ERROR]@client_Thread::getCmdlist recvf cmd list fails! " << ret << endl;
+        return ret;
     }
-    cout << buff << endl;
-    return 1;
+    cout << package.data << endl;
+    return rtn::SUCCESS;
 }
 
 /*获取服务器当前目录列表*/
-int client_Thread::getDirlist(){
-    char buff[BIG_SIZE];
-    int ret;
-    clean(buff);
-    ret = read(datsock,buff,sizeof(buff));
-    if (ret < 0){
-        cout << "[WARNING]read dir list fails!" << endl;
-        return 0;
+int client_Thread::getDirlist(uint16_t ident){
+    Package package;
+    int ret = recvPackage(datsock, &package, ident);
+    if (ret != rtn::SUCCESS){
+        cout << "[ERROR]@client_Thread::getDirlist recvf ls result fails! " << ret << endl;
+        return ret;
     }
-    cout << "dir list:\n" << buff << endl;
-    return 1;
+    cout << package.data << endl;
+    return rtn::SUCCESS;
 }
 
 /*获取服务器当前工作目录*/
-int client_Thread::getcurrentDir(){
-    char buff[BIG_SIZE];
-    int ret;
-    clean(buff);
-    ret = read(datsock,buff,sizeof(buff));
-    if (ret < 0){
-        cout << "[WARNING]read current dir fails!" << endl;
-        return 0;
+int client_Thread::getcurrentDir(uint16_t ident){
+    Package package;
+    int ret = recvPackage(datsock, &package, ident);
+    if (ret != rtn::SUCCESS){
+        cout << "[ERROR]@client_Thread::getcurrentDir recv pwd result fails! " << ret << endl;
+        return ret;
     }
-    cout << buff << endl;
-    return 1;
+    cout << package.data << endl;
+    return rtn::SUCCESS;
 }
 
 /*改变服务器当前工作目录*/
-int client_Thread::changeDir(){
+int client_Thread::changeDir(uint16_t ident){
     //发送新的文件名
     cout << "Please enter filename!" << endl;
     char buff[BIG_SIZE];
     cin >> buff;
-    int ret = write(datsock,buff,sizeof(buff));
-    if (ret < 0){
-        cout << "[WARNING]send new dir fails!" << endl;
-        return 0;
+    Package package;
+    int ret = sendPackage(datsock, &package, buff, strlen(buff), ptype::CLIENT_DATA_PACKAGE);
+    if (ret != rtn::SUCCESS){
+        cout << "[ERROR]@client_Thread::changeDir send cd target fails! " << ret << endl;
+        return ret;
     }
     cout << "[STATE]new dir sent to server" << endl;
-    clean(buff);
     //接收服务器回复
-    ret = read(datsock,buff,sizeof(buff));
-    if (ret < 0){
-        cout << "[WARNING]cd recv server reply fails!" << endl;
-        return 0;
+    Package rpackage;
+    ret = recvPackage(datsock, &rpackage, ident);
+    if (ret != rtn::SUCCESS){
+        cout << "[ERROR]@client_Thread::getcurrentDir recv pwd result fails! " << ret << endl;
+        return ret;
     }
-    cout << buff << endl;
-    return 1;
-}
-
-/*上传文件到服务器*/
-int client_Thread::upload(){
-    //发送文件名
-    cout << "[UPLOAD]Please enter filename" << endl;
-    char buff[BIG_SIZE];
-    cin >> buff;
-    int ret = write(datsock,buff,sizeof(buff));
-    if (ret < 0){
-        cout << "[WARNING]sending filename fails!" << endl;
-        return 0;
-    }
-    //发送文件
-    int file = open(buff, O_RDONLY);
-    clean(buff);
-    int len;
-    while(len = read(file,buff,BIG_SIZE)){
-        write(datsock,buff,BIG_SIZE);
-        if (len < BIG_SIZE)  break;
-    }
-    //发送终止符
-    string tem = ENDING;
-    clean(buff);
-    strcpy(buff,tem.c_str());
-    write(datsock,buff,BIG_SIZE);
-    cout << "[STATE]sending file over" << endl;
-    close(file);
-
-    return 1;
+    cout << rpackage.data << endl;
+    return rtn::SUCCESS;
 }
 
 /*从服务器下载文件*/
-int client_Thread::download(){
+int client_Thread::download(uint16_t ident){
     //发送请求文件名
     cout << "[DOWNLOAD]Please enter filename" << endl;
     char filename[BIG_SIZE];
     cin >> filename;
-    int ret = write(datsock,filename,sizeof(filename));
-    if (ret < 0){
-        cout << "[WARNING]sending filename fails!" << endl;
-        return 0;
+    Package package;
+    int ret = sendPackage(datsock, &package, filename, strlen(filename), ptype::CLIENT_DATA_PACKAGE);
+    if (ret != rtn::SUCCESS){
+        cout << "[ERROR]@client_Thread::download send target filename fails! " << ret << endl;
+        return ret;
     }
     //接收文件存在确认
-    char buff[BIG_SIZE];
-    ret = read(datsock,buff,sizeof(buff));
-    if (ret < 0){
-        cout << "[WARNING]recving file confirm fails!" << endl;
-        return 0;
+    ret = recvPackage(datsock, &package, ident);
+    if (ret != rtn::SUCCESS){
+        cout << "[ERROR]@client_Thread::download recv filename existance fails! " << ret << endl;
+        return ret;
     }
-    string tem = (string)buff;
+    string tem = (string)package.data;
     cout << tem << endl;
     if (tem == "[SERVER]file not found"){
-        return 0;
+        cout << "[ERROR]@client_Thread::download file not found: " << filename << endl;
+        return rtn::FILE_DONT_EXIST;
     }
     //接收文件
-    clean(buff);
     int file = open(filename, (O_WRONLY | O_CREAT));
-    int len;
-    while(len = read(datsock,buff,sizeof(buff))){
-        tem = (string)buff;
-        if (tem == ENDING)  break;
-        write(file,buff,BIG_SIZE);
-        if (len < BIG_SIZE) break;
+    Package filePackage;
+    ret = recvPackage(datsock, &filePackage, ident);
+    while(ret == rtn::SUCCESS){
+        if (ntohs(filePackage.package_type) == ptype::SERVER_EOF_PACKAGE)
+            break;
+        write(file,filePackage.data,PACKAGE_DATA_SIZE);
+//        if (strlen(filePackage.data) < PACKAGE_DATA_SIZE) break;
+        ret = recvPackage(datsock, &filePackage, ident);
+    }
+    if (ret != rtn::SUCCESS) {
+        cout << "[ERROR]@client_Thread::download file fails: " << ret << endl;
+        return ret;
     }
     close(file);
     cout << "[STATE]downloading file success" << endl;
-    return 1;
+    return rtn::SUCCESS;
 }
 
 /*客户端离线*/
-int client_Thread::quit(){
+int client_Thread::quit(uint16_t ident){
     cout << "[QUIT]Good Bye!" << endl;
     exit(1);
 }
@@ -182,13 +157,15 @@ int client_Thread::quit(){
 /*发送请求数据包*/
 int client_Thread::sendPackage(SOCKET sock, Package *package, char *content, int slen, uint16_t package_type){
     cout << "sending " << content << endl;
+    int plen = slen + PACKAGE_HEAD_SIZE;
     package->ident = htons(rand()|IDENT_RQ_BIT);
-    package->version = htons(0);
+    package->version = htons(VERSION);
     package->auth_protocol = htons(0);
     package->package_type = htons(package_type);
-    package->checksum = htons(calc_checksum((uint8_t*)package, slen));
+    clean(package->data);
     strncpy(package->data, content, slen);
-    int plen = slen + PACKAGE_HEAD_SIZE;
+    package->checksum = 0;
+    package->checksum = htons(calc_checksum((uint8_t*)package, plen));
     int ret = write(sock,package,plen);
     if (ret < 0) {
         cout << "[ERROR]@client_Thread::sendPackages " << ret << endl;
@@ -199,6 +176,7 @@ int client_Thread::sendPackage(SOCKET sock, Package *package, char *content, int
 
 /*接受响应数据包*/
 int client_Thread::recvPackage(SOCKET sock, Package *package, uint16_t ident) {
+    clean(package->data);
     int ret = read(sock, package, sizeof(*package));
     // 检查接收是否成功
     if (ret < 0){
@@ -215,12 +193,15 @@ int client_Thread::recvPackage(SOCKET sock, Package *package, uint16_t ident) {
         return rtn::PACKAGE_INCOMPLETE;
     }
     // 检查ident
-    if (ntohs(package->ident) != ident){
+    uint16_t recv_ident = ntohs(package->ident);
+    if ((recv_ident & IDENT_RQ_BIT) || (recv_ident | IDENT_RQ_BIT) != ident){
         cout << "[ERROR]@client_Thread::recvPackage ident doesn't match" << endl;
         return rtn::PACKAGE_IDENT_INCONSISTENT;
     }
     // 检查checksum
-    if (ntohs(package->checksum) != calc_checksum((uint8_t*)package, ret)){
+    uint16_t checksum = ntohs(package->checksum);
+    package->checksum = 0;
+    if (checksum != calc_checksum((uint8_t*)package, ret)){
         cout << "[ERROR]@client_Thread::recvPackage cksum doesn't match" << endl;
         return rtn::PACKAGE_CKSUM_INCONSISTENT;
     }
@@ -263,7 +244,7 @@ void client_Thread::run(){
 
         //接收服务器回复指令
         Package replyPackage;
-        ret = recvPackage(cmdsock, &replyPackage, cmdPackage.ident);
+        ret = recvPackage(cmdsock, &replyPackage, ntohs(cmdPackage.ident));
         if (ret != rtn::SUCCESS){
             cout << "[ERROR]@client_Thread::run get server reply fails! " << ret << endl;
             continue;
@@ -273,8 +254,9 @@ void client_Thread::run(){
             continue;
         }
         cout << "[OK]@client_Thread::run get server reply: " << endl << replyPackage.data << endl;
+
         //处理服务器回复
-        ret = deal_with_reply((string)replyPackage.data);
+        ret = deal_with_reply(replyPackage, ntohs(cmdPackage.ident));
         if (! ret){
             cout << "[ERROR]@client_Thread::run deal with server reply fails: " << replyPackage.data << endl;
             continue;

@@ -28,14 +28,13 @@ private:
     SOCKET datsock;
 public:
     client_Thread(SOCKET cs = 0,SOCKET ds = 0):cmdsock(cs),datsock(ds){}
-    int deal_with_reply(std::string);
-    int getCMDlist();
-    int getDirlist();
-    int getcurrentDir();
-    int changeDir();
-    int upload();
-    int download();
-    int quit();
+    int deal_with_reply(Package package, uint16_t ident);
+    int getCMDlist(uint16_t ident);
+    int getDirlist(uint16_t ident);
+    int getcurrentDir(uint16_t ident);
+    int changeDir(uint16_t ident);
+    int download(uint16_t ident);
+    int quit(uint16_t ident);
     int recvPackage(SOCKET sock, Package *package, uint16_t ident);
     int sendPackage(SOCKET sock, Package *package, char *content, int slen, uint16_t package_type);
     uint16_t calc_checksum(uint8_t* data, int len);

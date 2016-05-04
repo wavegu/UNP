@@ -17,8 +17,7 @@ TEMPLATE = app
 
 SOURCES += \
     server_main.cpp \
-    server_thread.cpp \
-    util.cpp
+    server_thread.cpp
 
 HEADERS += \
     package.h \

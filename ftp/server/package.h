@@ -3,6 +3,7 @@
 
 #include<iostream>
 
+#define VERSION 0
 #define TIMEOUT 1
 #define IDENT_RQ_BIT 0x8000
 #define PACKAGE_HEAD_SIZE 8
